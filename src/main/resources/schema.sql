@@ -1,8 +1,11 @@
 -- EMS student template schema
 -- Run this in MySQL before starting the Spring Boot app:
 --   CREATE DATABASE IF NOT EXISTS ems;
---   USE ems;
+--   USE haritha_db;
 --   SOURCE schema.sql;
+
+CREATE DATABASE IF NOT EXISTS haritha_db;
+USE haritha_db;
 
 CREATE TABLE IF NOT EXISTS app_user (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -196,3 +199,51 @@ WHERE ag.group_name = 'Administrators'
     SELECT 1 FROM auth_group_users existing
     WHERE existing.auth_group_id = ag.id AND existing.user_id = u.id
   );
+
+-- Module 8 - Service Zone Table
+CREATE TABLE IF NOT EXISTS service_zone (
+	id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    zone_code VARCHAR(50),
+    zone_name VARCHAR(100) NOT NULL,
+    city VARCHAR(100),
+    description VARCHAR(255),
+    status_id BIGINT NOT NULL,
+    created_date DATETIME,
+    created_by BIGINT,
+    updated_date DATETIME NULL,
+    updated_by BIGINT NULL,
+    CONSTRAINT fk_zone_status FOREIGN KEY (status_id) REFERENCES status(id)
+);
+
+-- Zone privileges
+INSERT INTO system_authentications (auth_id, auth_description, assigned)
+SELECT v.auth_id, v.auth_description, 1
+FROM (SELECT 50 AS auth_id, 'ZONE_VIEW' AS auth_description
+	UNION ALL SELECT 51, 'ZONE_CREATE'
+    UNION ALL SELECT 52, 'ZONE_UPDATE'
+    UNION ALL SELECT 53, 'ZONE_DELETE') v
+WHERE NOT EXISTS (SELECT 1 FROM system_authentications s WHERE s.auth_id = v.auth_id);
+
+-- USER_DELETE hidden
+UPDATE system_authentications SET assigned = 1 WHERE auth_id = 4;
+
+-- GIVE Admin the zone privileges
+INSERT INTO auth_group_authentication (auth_group_id, auth_id)
+SELECT ag.id, sa.auth_id
+FROM auth_groups ag
+CROSS JOIN system_authentications sa
+WHERE ag.group_name = 'Administrators'
+	AND sa.auth_id IN (50, 51, 52, 53)
+    AND NOT EXISTS (
+		SELECT 1 FROM auth_group_authentication x
+		WHERE x.auth_group_id = ag.id AND x.auth_id = sa.auth_id
+	);
+
+-- User groups
+INSERT INTO auth_groups (group_name, group_description, status)
+SELECT v.n, v.d, 1
+FROM (SELECT 'Citizen' AS n, 'Reports illegal dumps' AS d
+      UNION ALL SELECT 'House Owner', 'Requests household collection'
+      UNION ALL SELECT 'Restaurant', 'Requests and schedules pickups'
+      UNION ALL SELECT 'Collector', 'Accepts and completes jobs') v
+WHERE NOT EXISTS (SELECT 1 FROM auth_groups g WHERE g.group_name = v.n);
